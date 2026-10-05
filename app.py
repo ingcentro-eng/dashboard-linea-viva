@@ -1,814 +1,539 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control y Seguimiento Operacional — Línea Viva</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- SheetJS CDN para lectura de Excel -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
+import os
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0fdf4',
-                            500: '#16a34a',
-                            600: '#15803d',
-                            700: '#166534',
-                            900: '#14532d'
-                        },
-                        celsia: {
-                            500: '#ff6600',
-                            600: '#e65c00'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+# ---------------------------------------------------------
+# 1. CONFIGURACIÓN DE PÁGINA Y TEMA
+# ---------------------------------------------------------
+st.set_page_config(
+    page_title="Control Operacional Línea Viva — Celsia / PROING",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Estilos CSS de Alta Gama (UI/UX Limpia y Corporativa)
+st.markdown("""
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .tab-btn.active {
-            border-bottom: 3px solid #ff6600;
-            color: #ff6600;
-            font-weight: 700;
-        }
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    /* Estilos generales */
+    .main {
+        background-color: #f8fafc;
+    }
+    
+    /* Tarjetas KPI de Control Operativo */
+    .kpi-card {
+        background-color: #ffffff;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        border-left: 5px solid #0f172a;
+        transition: all 0.2s ease-in-out;
+    }
+    .kpi-card:hover {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+    .kpi-title {
+        font-size: 0.75rem;
+        color: #64748b;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+    }
+    .kpi-value {
+        font-size: 1.8rem;
+        color: #0f172a;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-top: 4px;
+    }
+    .kpi-subtext {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin-top: 4px;
+    }
+
+    /* Banners de Alertas Auditoría */
+    .alert-header {
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .alert-danger {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+    }
+    .alert-warning {
+        background-color: #fffbeb;
+        border: 1px solid #fef3c7;
+        color: #92400e;
+    }
+    .alert-purple {
+        background-color: #faf5ff;
+        border: 1px solid #e9d5ff;
+        color: #6b21a8;
+    }
+    .alert-info {
+        background-color: #f0f9ff;
+        border: 1px solid #bae6fd;
+        color: #075985;
+    }
+
+    /* Pestañas Personalizadas */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #ffffff;
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #64748b;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #ff6600 !important;
+        color: #ffffff !important;
+    }
     </style>
-</head>
-<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+""", unsafe_allow_html=True)
 
-    <!-- HEADER / BARRA SUPERIOR CORPORATIVA -->
-    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-50 border-b border-slate-800">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="bg-amber-500 p-2 rounded-lg text-slate-900 font-bold">
-                    <i class="fa-solid fa-bolt text-xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-lg font-bold tracking-tight leading-tight">Control Operacional — Línea Viva</h1>
-                    <p class="text-xs text-slate-400">Celsia & Proyectos de Ingeniería S.A.</p>
-                </div>
-            </div>
+
+# ---------------------------------------------------------
+# 2. LECTURA Y PROCESAMIENTO INTELIGENTE DE DATOS
+# ---------------------------------------------------------
+@st.cache_data(ttl=60)
+def load_and_clean_data():
+    excel_path = 'COPIA PROGRAMADOR SEGUIMIENTO.xlsx'
+    
+    if not os.path.exists(excel_path):
+        st.error(f"⚠️ No se encontró el archivo base '{excel_path}' en el repositorio.")
+        return pd.DataFrame(), pd.DataFrame()
+        
+    try:
+        # Carga del Excel de seguimiento
+        df = pd.read_excel(excel_path, sheet_name='Hoja1')
+        
+        # Limpieza estándar
+        df['GRUPO'] = df['GRUPO'].fillna('SIN GRUPO').astype(str).str.strip()
+        df['MES'] = df['MES'].fillna('SIN MES').astype(str).str.strip().str.upper()
+        df['JEFE DE CUADRILLA'] = df['JEFE DE CUADRILLA'].fillna('NO ASIGNADO').astype(str).str.strip()
+        df['Estado'] = df['Estado'].fillna('Pendiente').astype(str).str.strip()
+        df['DILIGENCIADA EN SISPROING'] = df['DILIGENCIADA EN SISPROING'].fillna('SIN DILIGENCIAR').astype(str).str.strip()
+        df['OM'] = df['OM'].fillna('').astype(str).str.strip()
+        df['AVISO (VP)'] = df['AVISO (VP)'].fillna('').astype(str).str.strip()
+        df['OBSERVACIONES'] = df['OBSERVACIONES'].fillna('').astype(str).str.strip()
+        
+        # Fechas y cálculo de días activos
+        if 'FECHA' in df.columns:
+            df['FECHA_DT'] = pd.to_datetime(df['FECHA'], errors='coerce')
+            df['FECHA_STR'] = df['FECHA_DT'].dt.strftime('%Y-%m-%d')
             
-            <div class="flex items-center space-x-4">
-                <label for="excelFileInput" class="cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold text-xs px-3.5 py-2 rounded-lg transition-all flex items-center shadow-md">
-                    <i class="fa-solid fa-file-excel mr-2 text-sm"></i> Cargar / Actualizar Excel
-                </label>
-                <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="hidden" />
-                <span id="fileNameDisplay" class="text-xs text-slate-300 italic hidden sm:inline">Esperando archivo...</span>
-            </div>
+            # Fecha de referencia: HOY (Día del cargue/consulta)
+            hoy = pd.to_datetime(datetime.now().date())
+            df['DIAS_EN_EJECUCION'] = (hoy - df['FECHA_DT']).dt.days
+            df['DIAS_EN_EJECUCION'] = df['DIAS_EN_EJECUCION'].apply(lambda x: max(0, x) if pd.notnull(x) else 0)
+            df['ES_FIN_SEMANA'] = df['FECHA_DT'].dt.dayofweek.isin([5, 6]) # Sábado (5) o Domingo (6)
+        else:
+            df['FECHA_STR'] = 'N/A'
+            df['DIAS_EN_EJECUCION'] = 0
+            df['ES_FIN_SEMANA'] = False
+
+        # Regla Unificada de Cancelación (Estado == Cancelado O Sisproing empieza por CANCELAR)
+        df['ES_CANCELADO'] = (
+            (df['Estado'].str.lower() == 'cancelado') | 
+            (df['DILIGENCIADA EN SISPROING'].str.upper().str.startswith('CANCELAR'))
+        )
+        
+        # Carga opcional del CSV de Navegador de Incidentes
+        df_csv = pd.DataFrame()
+        csv_files = [f for f in os.listdir('.') if f.startswith('Navegador de incidentes') and f.endswith('.csv')]
+        if csv_files:
+            try:
+                df_csv = pd.read_csv(csv_files[0], skiprows=5, sep=';', encoding='utf-8', on_bad_lines='skip')
+            except Exception:
+                pass
+
+        return df, df_csv
+
+    except Exception as e:
+        st.error(f"Error procesando el archivo de datos: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+df_raw, df_incidentes = load_and_clean_data()
+
+if df_raw.empty:
+    st.stop()
+
+
+# ---------------------------------------------------------
+# 3. BARRA LATERAL (FILTROS DE CONTROL OPERATIVO)
+# ---------------------------------------------------------
+with st.sidebar:
+    st.image("https://img.icons8.com/fluency/96/flash-on.png", width=48)
+    st.title("Filtros de Control")
+    st.caption("Sistema de Monitoreo Diario — Línea Viva")
+    st.divider()
+
+    # 1. Opción de exclusión de pesadas
+    segmentacion = st.radio(
+        "Segmentación de Cuadrillas:",
+        options=["⚡ Solo Línea Viva (LINV)", "🚜 Todas (Incluye CUAD y CR)"],
+        index=0,
+        help="Por defecto se visualiza únicamente el personal de Línea Viva."
+    )
+
+    if segmentacion.startswith("⚡"):
+        df_base = df_raw[df_raw['GRUPO'].str.startswith('LINV')].copy()
+    else:
+        df_base = df_raw.copy()
+
+    # 2. Filtro de Mes
+    meses_ord = ["MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE"]
+    meses_disponibles = sorted(df_base['MES'].unique().tolist())
+    meses_final = [m for m in meses_ord if m in meses_disponibles] + [m for m in meses_disponibles if m not in meses_ord]
+    
+    sel_mes = st.multiselect("Mes de Operación:", options=meses_final, default=meses_final)
+    if sel_mes:
+        df_base = df_base[df_base['MES'].isin(sel_mes)]
+
+    # 3. Filtro por Cuadrilla (Grupo)
+    grupos_disp = sorted(df_base['GRUPO'].unique().tolist())
+    sel_grupo = st.multiselect("Cuadrilla (Grupo):", options=grupos_disp, default=grupos_disp)
+    if sel_grupo:
+        df_base = df_base[df_base['GRUPO'].isin(sel_grupo)]
+
+    # 4. Filtro por Jefe de Cuadrilla
+    jefes_disp = sorted(df_base['JEFE DE CUADRILLA'].unique().tolist())
+    sel_jefe = st.multiselect("Jefe de Cuadrilla:", options=jefes_disp, default=jefes_disp)
+    if sel_jefe:
+        df_base = df_base[df_base['JEFE DE CUADRILLA'].isin(sel_jefe)]
+
+    # 5. Filtro Avanzado por ESTADO
+    estados_disp = sorted(df_base['Estado'].unique().tolist())
+    sel_estado = st.multiselect("Estado de Actividad:", options=estados_disp, default=estados_disp)
+    if sel_estado:
+        df_base = df_base[df_base['Estado'].isin(sel_estado)]
+
+    # 6. Filtro Avanzado por SISPROING
+    sisproing_disp = sorted(df_base['DILIGENCIADA EN SISPROING'].unique().tolist())
+    sel_sisproing = st.multiselect("Diligenciada en Sisproing:", options=sisproing_disp, default=sisproing_disp)
+    if sel_sisproing:
+        df_base = df_base[df_base['DILIGENCIADA EN SISPROING'].isin(sel_sisproing)]
+
+    st.divider()
+    st.markdown(f"**Registros seleccionados:** `{len(df_base):,}`")
+
+
+# ---------------------------------------------------------
+# 4. ENCABEZADO Y TARJETAS KPI PRINCIPALES
+# ---------------------------------------------------------
+st.title("⚡ Control y Seguimiento Operacional — Línea Viva")
+st.caption(f"Sincronización de datos al día de hoy: **{datetime.now().strftime('%d/%m/%Y %H:%M')}** | Celsia — Proyectos de Ingeniería S.A.")
+
+st.write("")
+
+# Cálculo numérico de KPIs
+total_act = len(df_base)
+finalizados = len(df_base[df_base['Estado'].str.lower().isin(['finalizado', 'ejecutado']) & (~df_base['ES_CANCELADO'])])
+en_ejecucion = len(df_base[df_base['Estado'].str.lower() == 'en ejecución'])
+fin_sin_diligenciar = len(df_base[df_base['Estado'].str.lower().isin(['finalizado', 'ejecutado']) & (df_base['DILIGENCIADA EN SISPROING'].str.upper() != 'DILIGENCIADA') & (~df_base['ES_CANCELADO'])])
+reprogramados = len(df_base[df_base['Estado'].str.lower().isin(['re-programado', 'reprogramado'])])
+cancelados = len(df_base[df_base['ES_CANCELADO']])
+
+# Render Tarjetas KPI
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+
+with c1:
+    st.markdown(f"""
+        <div class="kpi-card" style="border-left-color: #334155;">
+            <div class="kpi-title">Total Actividades</div>
+            <div class="kpi-value">{total_act:,}</div>
+            <div class="kpi-subtext">Programadas en filtro</div>
         </div>
-    </header>
+    """, unsafe_allow_html=True)
 
-    <!-- LAYOUT PRINCIPAL -->
-    <div class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+with c2:
+    st.markdown(f"""
+        <div class="kpi-card" style="border-left-color: #10b981;">
+            <div class="kpi-title">Finalizadas</div>
+            <div class="kpi-value">{finalizados:,}</div>
+            <div class="kpi-subtext">{(finalizados/total_act*100 if total_act else 0):.1f}% del total</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-        <!-- PANEL LATERAL DE FILTROS -->
-        <aside class="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-5 h-fit sticky top-20">
-            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
-                    <i class="fa-solid fa-filter text-amber-500 mr-2"></i> Filtros de Control
-                </h2>
-                <button onclick="resetFilters()" class="text-xs text-slate-500 hover:text-amber-600 underline">Limpiar</button>
-            </div>
+with c3:
+    st.markdown(f"""
+        <div class="kpi-card" style="border-left-color: #f59e0b;">
+            <div class="kpi-title">En Ejecución</div>
+            <div class="kpi-value">{en_ejecucion:,}</div>
+            <div class="kpi-subtext">En desarrollo activo</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-            <!-- Selector Exclusión de Pesadas -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-2">Segmentación de Cuadrillas</label>
-                <div class="space-y-1.5">
-                    <label class="flex items-center text-xs text-slate-700 cursor-pointer p-2 rounded hover:bg-slate-50 border border-slate-200">
-                        <input type="radio" name="cuadrillaType" value="LINV" checked onchange="applyFilters()" class="text-amber-500 focus:ring-amber-500">
-                        <span class="ml-2 font-medium">Solo Línea Viva (LINV)</span>
-                    </label>
-                    <label class="flex items-center text-xs text-slate-700 cursor-pointer p-2 rounded hover:bg-slate-50 border border-slate-200">
-                        <input type="radio" name="cuadrillaType" value="ALL" onchange="applyFilters()" class="text-amber-500 focus:ring-amber-500">
-                        <span class="ml-2 font-medium">Todas (Incluye CUAD y CR)</span>
-                    </label>
-                </div>
-            </div>
+with c4:
+    st.markdown(f"""
+        <div class="kpi-card" style="border-left-color: #a855f7;">
+            <div class="kpi-title">Fin. Sin Diligenciar</div>
+            <div class="kpi-value">{fin_sin_diligenciar:,}</div>
+            <div class="kpi-subtext">Pendientes Sisproing</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-            <!-- Filtro Mes -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Mes de Operación</label>
-                <select id="filterMes" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-xs p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    <option value="ALL">Todos los Meses</option>
-                </select>
-            </div>
+with c5:
+    st.markdown(f"""
+        <div class="kpi-card" style="border-left-color: #6366f1;">
+            <div class="kpi-title">Re-Programadas</div>
+            <div class="kpi-value">{reprogramados:,}</div>
+            <div class="kpi-subtext">Pendientes por rep.</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-            <!-- Filtro Cuadrilla -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Cuadrilla (Grupo)</label>
-                <select id="filterGrupo" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-xs p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    <option value="ALL">Todas las Cuadrillas</option>
-                </select>
-            </div>
+with c6:
+    st.markdown(f"""
+        <div class="kpi-card" style="border-left-color: #ef4444;">
+            <div class="kpi-title">Canceladas</div>
+            <div class="kpi-value">{cancelados:,}</div>
+            <div class="kpi-subtext">Por sistema o cliente</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-            <!-- Filtro Jefe de Cuadrilla -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Jefe de Cuadrilla</label>
-                <select id="filterJefe" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-xs p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    <option value="ALL">Todos los Jefes</option>
-                </select>
-            </div>
+st.write("")
 
-            <!-- NUEVO: Filtro por Estado -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Estado de Actividad</label>
-                <select id="filterEstado" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-xs p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    <option value="ALL">Todos los Estados</option>
-                </select>
-            </div>
 
-            <!-- NUEVO: Filtro por Diligenciada en Sisproing -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Diligenciada en Sisproing</label>
-                <select id="filterSisproing" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-xs p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    <option value="ALL">Todos los Estados Sisproing</option>
-                </select>
-            </div>
+# ---------------------------------------------------------
+# 5. ESTRUCTURA DE PESTAÑAS Y CONTENIDO DETALLADO
+# ---------------------------------------------------------
+t_audit, t_fin, t_fds, t_charts, t_data = st.tabs([
+    "🚨 Auditoría Operativa Crítica",
+    "✅ Actividades Finalizadas",
+    "📅 Control Fines de Semana (Sáb/Dom)",
+    "📊 Análisis Estadístico y Desempeño",
+    "📋 Base Completa de Seguimiento"
+])
 
-            <div class="pt-2 text-center text-xs text-slate-400">
-                <span id="recordCountDisplay">0 registros visualizados</span>
-            </div>
-        </aside>
+# ---------------------------------------------------------
+# PESTAÑA 1: AUDITORÍA OPERATIVA CRÍTICA
+# ---------------------------------------------------------
+with t_audit:
+    st.markdown("### 📌 Módulo de Control de Imprevistos y Cuellos de Botella")
+    st.caption("Identificación inmediata de órdenes estancadas, inconclusas o con inconsistencias de registro.")
 
-        <!-- ÁREA DE CONTENIDO Y DASHBOARD -->
-        <main class="lg:col-span-9 space-y-6">
+    col_a1, col_a2 = st.columns(2)
 
-            <!-- TARJETAS DE KPIS PRINCIPALES -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-slate-700">
-                    <span class="text-[11px] font-bold text-slate-500 uppercase block">Total Actividades</span>
-                    <span id="kpiTotal" class="text-xl font-extrabold text-slate-900 mt-1 block">0</span>
-                </div>
-                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
-                    <span class="text-[11px] font-bold text-emerald-600 uppercase block">Finalizadas</span>
-                    <span id="kpiFinalizados" class="text-xl font-extrabold text-slate-900 mt-1 block">0</span>
-                </div>
-                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-500">
-                    <span class="text-[11px] font-bold text-amber-600 uppercase block">En Ejecución</span>
-                    <span id="kpiEjecucion" class="text-xl font-extrabold text-slate-900 mt-1 block">0</span>
-                </div>
-                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-purple-500">
-                    <span class="text-[11px] font-bold text-purple-600 uppercase block">Fin. SIN Diligenciar</span>
-                    <span id="kpiFinSinDil" class="text-xl font-extrabold text-slate-900 mt-1 block">0</span>
-                </div>
-                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-indigo-500">
-                    <span class="text-[11px] font-bold text-indigo-600 uppercase block">Re-Programadas</span>
-                    <span id="kpiReprogramados" class="text-xl font-extrabold text-slate-900 mt-1 block">0</span>
-                </div>
-                <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-rose-500">
-                    <span class="text-[11px] font-bold text-rose-600 uppercase block">Canceladas</span>
-                    <span id="kpiCancelados" class="text-xl font-extrabold text-slate-900 mt-1 block">0</span>
-                </div>
-            </div>
-
-            <!-- PESTAÑAS DE NAVEGACIÓN -->
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="flex border-b border-slate-200 overflow-x-auto custom-scroll bg-slate-50">
-                    <button onclick="switchTab('auditoria')" id="tab-auditoria" class="tab-btn active px-5 py-3.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center whitespace-nowrap">
-                        <i class="fa-solid fa-triangle-exclamation mr-2 text-amber-500"></i> Auditoría Crítica
-                    </button>
-                    <button onclick="switchTab('finalizadas')" id="tab-finalizadas" class="tab-btn px-5 py-3.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center whitespace-nowrap">
-                        <i class="fa-solid fa-circle-check mr-2 text-emerald-500"></i> Actividades Finalizadas
-                    </button>
-                    <button onclick="switchTab('finesSemana')" id="tab-finesSemana" class="tab-btn px-5 py-3.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center whitespace-nowrap">
-                        <i class="fa-solid fa-calendar-week mr-2 text-indigo-500"></i> Fines de Semana (Sáb/Dom)
-                    </button>
-                    <button onclick="switchTab('graficos')" id="tab-graficos" class="tab-btn px-5 py-3.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center whitespace-nowrap">
-                        <i class="fa-solid fa-chart-pie mr-2 text-sky-500"></i> Análisis Estadístico
-                    </button>
-                    <button onclick="switchTab('tabla')" id="tab-tabla" class="tab-btn px-5 py-3.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center whitespace-nowrap">
-                        <i class="fa-solid fa-table-list mr-2 text-slate-600"></i> Base de Datos Completa
-                    </button>
-                </div>
-
-                <!-- CONTENIDO DE PESTAÑA 1: AUDITORÍA CRÍTICA -->
-                <div id="content-auditoria" class="p-5 space-y-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        
-                        <!-- 1. En Ejecución con días transcurridos -->
-                        <div class="bg-amber-50/50 border border-amber-200 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-xs font-bold text-amber-900 uppercase flex items-center">
-                                    <i class="fa-solid fa-clock text-amber-600 mr-2"></i> Actividades EN EJECUCIÓN
-                                </h3>
-                                <span id="badgeEjecucion" class="bg-amber-200 text-amber-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full">0</span>
-                            </div>
-                            <div class="overflow-x-auto max-h-60 custom-scroll">
-                                <table class="w-full text-left text-xs text-slate-700">
-                                    <thead class="bg-amber-100 text-amber-900 sticky top-0">
-                                        <tr>
-                                            <th class="p-2">Fecha</th>
-                                            <th class="p-2 text-center">Días Activos</th>
-                                            <th class="p-2">Cuadrilla</th>
-                                            <th class="p-2">OM / Aviso</th>
-                                            <th class="p-2">Sisproing</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tableEjecucionBody" class="divide-y divide-amber-100">
-                                        <!-- Filas dinámicas -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- 2. Finalizado SIN Diligenciar en Sisproing -->
-                        <div class="bg-purple-50/50 border border-purple-200 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-xs font-bold text-purple-900 uppercase flex items-center">
-                                    <i class="fa-solid fa-file-circle-xmark text-purple-600 mr-2"></i> Finalizado SIN Diligenciar
-                                </h3>
-                                <span id="badgeFinSinDil" class="bg-purple-200 text-purple-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full">0</span>
-                            </div>
-                            <div class="overflow-x-auto max-h-60 custom-scroll">
-                                <table class="w-full text-left text-xs text-slate-700">
-                                    <thead class="bg-purple-100 text-purple-900 sticky top-0">
-                                        <tr>
-                                            <th class="p-2">Fecha</th>
-                                            <th class="p-2">Cuadrilla</th>
-                                            <th class="p-2">Jefe Cuadrilla</th>
-                                            <th class="p-2">OM / Aviso</th>
-                                            <th class="p-2">Estado Sisproing</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tableFinSinDilBody" class="divide-y divide-purple-100">
-                                        <!-- Filas dinámicas -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                        <!-- 3. Actividades Re-Programadas -->
-                        <div class="bg-indigo-50/50 border border-indigo-200 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-xs font-bold text-indigo-900 uppercase flex items-center">
-                                    <i class="fa-solid fa-calendar-xmark text-indigo-600 mr-2"></i> Actividades Re-Programadas
-                                </h3>
-                                <span id="badgeReprogramados" class="bg-indigo-200 text-indigo-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full">0</span>
-                            </div>
-                            <div class="overflow-x-auto max-h-60 custom-scroll">
-                                <table class="w-full text-left text-xs text-slate-700">
-                                    <thead class="bg-indigo-100 text-indigo-900 sticky top-0">
-                                        <tr>
-                                            <th class="p-2">Fecha</th>
-                                            <th class="p-2">Cuadrilla</th>
-                                            <th class="p-2">OM / Aviso</th>
-                                            <th class="p-2">Observaciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tableReprogramadosBody" class="divide-y divide-indigo-100">
-                                        <!-- Filas dinámicas -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- 4. Actividades Canceladas (Ajustadas con Sisproing) -->
-                        <div class="bg-rose-50/50 border border-rose-200 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-xs font-bold text-rose-900 uppercase flex items-center">
-                                    <i class="fa-solid fa-ban text-rose-600 mr-2"></i> Actividades Canceladas (Total)
-                                </h3>
-                                <span id="badgeCancelados" class="bg-rose-200 text-rose-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full">0</span>
-                            </div>
-                            <div class="overflow-x-auto max-h-60 custom-scroll">
-                                <table class="w-full text-left text-xs text-slate-700">
-                                    <thead class="bg-rose-100 text-rose-900 sticky top-0">
-                                        <tr>
-                                            <th class="p-2">Fecha</th>
-                                            <th class="p-2">Cuadrilla</th>
-                                            <th class="p-2">OM / Aviso</th>
-                                            <th class="p-2">Origen Cancelación</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tableCanceladosBody" class="divide-y divide-rose-100">
-                                        <!-- Filas dinámicas -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-
-                <!-- CONTENIDO DE PESTAÑA 2: ACTIVIDADES FINALIZADAS (NUEVO) -->
-                <div id="content-finalizadas" class="p-5 hidden space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-900 uppercase">Panel de Control de Obras Finalizadas</h3>
-                            <p class="text-xs text-slate-500">Muestra todas las actividades ejecutadas y su estado de registro en Sisproing.</p>
-                        </div>
-                        <button onclick="exportTableToCSV('tableFinalizadasFull', 'finalizadas_linea_viva.csv')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg">
-                            <i class="fa-solid fa-download mr-1"></i> Exportar Finalizadas
-                        </button>
-                    </div>
-
-                    <div class="overflow-x-auto max-h-96 custom-scroll">
-                        <table id="tableFinalizadasFull" class="w-full text-left text-xs text-slate-700">
-                            <thead class="bg-slate-100 text-slate-800 sticky top-0 border-b border-slate-200">
-                                <tr>
-                                    <th class="p-2.5">Mes</th>
-                                    <th class="p-2.5">Fecha</th>
-                                    <th class="p-2.5">Cuadrilla</th>
-                                    <th class="p-2.5">Jefe de Cuadrilla</th>
-                                    <th class="p-2.5">OM</th>
-                                    <th class="p-2.5">Aviso (VP)</th>
-                                    <th class="p-2.5">Sisproing</th>
-                                    <th class="p-2.5">Observaciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tableFinalizadasBody" class="divide-y divide-slate-100">
-                                <!-- Filas dinámicas -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- CONTENIDO DE PESTAÑA 3: FINES DE SEMANA -->
-                <div id="content-finesSemana" class="p-5 hidden space-y-4">
-                    <div class="border-b border-slate-100 pb-3">
-                        <h3 class="text-sm font-bold text-slate-900 uppercase">Disponibilidad Operativa en Fines de Semana</h3>
-                        <p class="text-xs text-slate-500">Auditoría de turnos de Sábados y Domingos (Validación de cuadrilla de turno disponible vs descanso).</p>
-                    </div>
-
-                    <div class="overflow-x-auto max-h-96 custom-scroll">
-                        <table class="w-full text-left text-xs text-slate-700">
-                            <thead class="bg-indigo-50 text-indigo-900 sticky top-0 border-b border-indigo-200">
-                                <tr>
-                                    <th class="p-2.5">Fecha (Sáb/Dom)</th>
-                                    <th class="p-2.5">Mes</th>
-                                    <th class="p-2.5">Cuadrilla</th>
-                                    <th class="p-2.5">Jefe Cuadrilla</th>
-                                    <th class="p-2.5">Estado Operativo</th>
-                                    <th class="p-2.5">Sisproing</th>
-                                    <th class="p-2.5">OM / Aviso</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tableFinesSemanaBody" class="divide-y divide-slate-100">
-                                <!-- Filas dinámicas -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- CONTENIDO DE PESTAÑA 4: ANÁLISIS ESTADÍSTICO -->
-                <div id="content-graficos" class="p-5 hidden space-y-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <h4 class="text-xs font-bold text-slate-800 uppercase mb-3">Distribución por Mes y Estado</h4>
-                            <div class="h-64">
-                                <canvas id="chartMesEstado"></canvas>
-                            </div>
-                        </div>
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <h4 class="text-xs font-bold text-slate-800 uppercase mb-3">Estado de Diligenciamiento Sisproing</h4>
-                            <div class="h-64 flex justify-center">
-                                <canvas id="chartSisproing"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- CONTENIDO DE PESTAÑA 5: BASE DE DATOS COMPLETA -->
-                <div id="content-tabla" class="p-5 hidden space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <h3 class="text-sm font-bold text-slate-900 uppercase">Base de Datos Completa de Seguimiento</h3>
-                        <button onclick="exportTableToCSV('tableFullData', 'seguimiento_completo.csv')" class="bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs px-3 py-1.5 rounded-lg">
-                            <i class="fa-solid fa-file-csv mr-1"></i> Exportar CSV
-                        </button>
-                    </div>
-
-                    <div class="overflow-x-auto max-h-96 custom-scroll">
-                        <table id="tableFullData" class="w-full text-left text-xs text-slate-700">
-                            <thead class="bg-slate-100 text-slate-800 sticky top-0 border-b border-slate-200">
-                                <tr>
-                                    <th class="p-2">Mes</th>
-                                    <th class="p-2">Fecha</th>
-                                    <th class="p-2">Cuadrilla</th>
-                                    <th class="p-2">Jefe Cuadrilla</th>
-                                    <th class="p-2">OM</th>
-                                    <th class="p-2">Aviso (VP)</th>
-                                    <th class="p-2">Estado</th>
-                                    <th class="p-2">Sisproing</th>
-                                    <th class="p-2">Observaciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tableFullDataBody" class="divide-y divide-slate-100">
-                                <!-- Filas dinámicas -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
-
-        </main>
-    </div>
-
-    <!-- LOGICA JAVASCRIPT DEL APLICATIVO -->
-    <script>
-        let rawData = [];
-        let filteredData = [];
-        let chart1Instance = null;
-        let chart2Instance = null;
-
-        // Carga de Excel local vía input
-        document.getElementById('excelFileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            document.getElementById('fileNameDisplay').innerText = file.name;
-            document.getElementById('fileNameDisplay').classList.remove('hidden');
-
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                try {
-                    const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { raw: false });
-                    
-                    processRawData(json);
-                } catch (err) {
-                    alert("Error al leer el archivo Excel: " + err.message);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        });
-
-        // Intentar autoreload de archivo por defecto si existe en la misma carpeta
-        window.addEventListener('DOMContentLoaded', () => {
-            fetch('COPIA PROGRAMADOR SEGUIMIENTO.xlsx')
-                .then(res => {
-                    if (res.ok) return res.arrayBuffer();
-                    throw new Error("No encontrado");
-                })
-                .then(data => {
-                    const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { raw: false });
-                    document.getElementById('fileNameDisplay').innerText = 'COPIA PROGRAMADOR SEGUIMIENTO.xlsx (Auto)';
-                    document.getElementById('fileNameDisplay').classList.remove('hidden');
-                    processRawData(json);
-                })
-                .catch(() => {
-                    console.log("Cargue manual disponible mediante botón superior.");
-                });
-        });
-
-        function processRawData(json) {
-            const today = new Date();
-
-            rawData = json.map((row, idx) => {
-                const grupo = (row['GRUPO'] || 'SIN GRUPO').toString().trim();
-                const estado = (row['Estado'] || 'Pendiente').toString().trim();
-                const sisproing = (row['DILIGENCIADA EN SISPROING'] || 'SIN DILIGENCIAR').toString().trim();
-                const mes = (row['MES'] || 'SIN MES').toString().trim().toUpperCase();
-                const jefe = (row['JEFE DE CUADRILLA'] || 'NO ASIGNADO').toString().trim();
-                const om = (row['OM'] || '').toString().trim();
-                const aviso = (row['AVISO (VP)'] || '').toString().trim();
-                const obs = (row['OBSERVACIONES'] || '').toString().trim();
-
-                let fechaObj = null;
-                let fechaStr = (row['FECHA'] || '').toString().trim();
-                let diasEjecucion = 0;
-                let esFinDeSemana = false;
-
-                if (fechaStr) {
-                    fechaObj = new Date(fechaStr);
-                    if (!isNaN(fechaObj)) {
-                        const diffTime = Math.abs(today - fechaObj);
-                        diasEjecucion = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                        const dayOfWeek = fechaObj.getDay(); // 0 = Domingo, 6 = Sábado
-                        esFinDeSemana = (dayOfWeek === 0 || dayOfWeek === 6);
-                    }
-                }
-
-                // Definición unificada de Cancelado
-                const esCancelado = (estado.toLowerCase() === 'cancelado') || sisproing.toUpperCase().startsWith('CANCELAR');
-
-                return {
-                    id: idx,
-                    grupo,
-                    estado,
-                    sisproing,
-                    mes,
-                    jefe,
-                    om,
-                    aviso,
-                    obs,
-                    fechaStr,
-                    fechaObj,
-                    diasEjecucion,
-                    esFinDeSemana,
-                    esCancelado
-                };
-            });
-
-            populateFilterDropdowns();
-            applyFilters();
-        }
-
-        function populateFilterDropdowns() {
-            const selectMes = document.getElementById('filterMes');
-            const selectGrupo = document.getElementById('filterGrupo');
-            const selectJefe = document.getElementById('filterJefe');
-            const selectEstado = document.getElementById('filterEstado');
-            const selectSisproing = document.getElementById('filterSisproing');
-
-            const meses = [...new Set(rawData.map(r => r.mes))].sort();
-            const grupos = [...new Set(rawData.map(r => r.grupo))].sort();
-            const jefes = [...new Set(rawData.map(r => r.jefe))].sort();
-            const estados = [...new Set(rawData.map(r => r.estado))].sort();
-            const sisproings = [...new Set(rawData.map(r => r.sisproing))].sort();
-
-            fillSelectOptions(selectMes, meses);
-            fillSelectOptions(selectGrupo, grupos);
-            fillSelectOptions(selectJefe, jefes);
-            fillSelectOptions(selectEstado, estados);
-            fillSelectOptions(selectSisproing, sisproings);
-        }
-
-        function fillSelectOptions(selectElem, items) {
-            const currentVal = selectElem.value;
-            selectElem.innerHTML = `<option value="ALL">Todos</option>`;
-            items.forEach(item => {
-                if (item) {
-                    const opt = document.createElement('option');
-                    opt.value = item;
-                    opt.textContent = item;
-                    selectElem.appendChild(opt);
-                }
-            });
-            selectElem.value = currentVal || 'ALL';
-        }
-
-        function applyFilters() {
-            const typeCuadrilla = document.querySelector('input[name="cuadrillaType"]:checked').value;
-            const mesVal = document.getElementById('filterMes').value;
-            const grupoVal = document.getElementById('filterGrupo').value;
-            const jefeVal = document.getElementById('filterJefe').value;
-            const estadoVal = document.getElementById('filterEstado').value;
-            const sisproingVal = document.getElementById('filterSisproing').value;
-
-            filteredData = rawData.filter(r => {
-                if (typeCuadrilla === 'LINV' && !r.grupo.startsWith('LINV')) return false;
-                if (mesVal !== 'ALL' && r.mes !== mesVal) return false;
-                if (grupoVal !== 'ALL' && r.grupo !== grupoVal) return false;
-                if (jefeVal !== 'ALL' && r.jefe !== jefeVal) return false;
-                if (estadoVal !== 'ALL' && r.estado !== estadoVal) return false;
-                if (sisproingVal !== 'ALL' && r.sisproing !== sisproingVal) return false;
-                return true;
-            });
-
-            document.getElementById('recordCountDisplay').innerText = `${filteredData.length} registros encontrados`;
-            updateKPIs();
-            renderAuditoriaTables();
-            renderFinalizadasTable();
-            renderFinesSemanaTable();
-            renderFullTable();
-            renderCharts();
-        }
-
-        function resetFilters() {
-            document.querySelector('input[name="cuadrillaType"][value="LINV"]').checked = true;
-            document.getElementById('filterMes').value = 'ALL';
-            document.getElementById('filterGrupo').value = 'ALL';
-            document.getElementById('filterJefe').value = 'ALL';
-            document.getElementById('filterEstado').value = 'ALL';
-            document.getElementById('filterSisproing').value = 'ALL';
-            applyFilters();
-        }
-
-        function updateKPIs() {
-            const total = filteredData.length;
-            const finalizados = filteredData.filter(r => ['finalizado', 'ejecutado'].includes(r.estado.toLowerCase())).length;
-            const ejecucion = filteredData.filter(r => r.estado.toLowerCase() === 'en ejecución').length;
-            const finSinDil = filteredData.filter(r => ['finalizado', 'ejecutado'].includes(r.estado.toLowerCase()) && r.sisproing.toUpperCase() !== 'DILIGENCIADA').length;
-            const reprogramados = filteredData.filter(r => ['re-programado', 'reprogramado'].includes(r.estado.toLowerCase())).length;
-            const cancelados = filteredData.filter(r => r.esCancelado).length;
-
-            document.getElementById('kpiTotal').innerText = total;
-            document.getElementById('kpiFinalizados').innerText = finalizados;
-            document.getElementById('kpiEjecucion').innerText = ejecucion;
-            document.getElementById('kpiFinSinDil').innerText = finSinDil;
-            document.getElementById('kpiReprogramados').innerText = reprogramados;
-            document.getElementById('kpiCancelados').innerText = cancelados;
-
-            document.getElementById('badgeEjecucion').innerText = ejecucion;
-            document.getElementById('badgeFinSinDil').innerText = finSinDil;
-            document.getElementById('badgeReprogramados').innerText = reprogramados;
-            document.getElementById('badgeCancelados').innerText = cancelados;
-        }
-
-        function renderAuditoriaTables() {
-            // Table 1: En Ejecucion
-            const listEjecucion = filteredData.filter(r => r.estado.toLowerCase() === 'en ejecución');
-            const tbodyEjec = document.getElementById('tableEjecucionBody');
-            tbodyEjec.innerHTML = listEjecucion.map(r => `
-                <tr class="hover:bg-amber-100/50">
-                    <td class="p-2 whitespace-nowrap font-medium">${r.fechaStr}</td>
-                    <td class="p-2 text-center font-bold text-amber-700 bg-amber-100 rounded">${r.diasEjecucion} días</td>
-                    <td class="p-2 font-semibold">${r.grupo}</td>
-                    <td class="p-2">${r.om || r.aviso}</td>
-                    <td class="p-2">${r.sisproing}</td>
-                </tr>
-            `).join('') || '<tr><td colspan="5" class="p-3 text-center text-slate-400">Sin registros</td></tr>';
-
-            // Table 2: Finalizado SIN Diligenciar
-            const listFinSinDil = filteredData.filter(r => ['finalizado', 'ejecutado'].includes(r.estado.toLowerCase()) && r.sisproing.toUpperCase() !== 'DILIGENCIADA');
-            const tbodyFinSinDil = document.getElementById('tableFinSinDilBody');
-            tbodyFinSinDil.innerHTML = listFinSinDil.map(r => `
-                <tr class="hover:bg-purple-100/50">
-                    <td class="p-2 whitespace-nowrap">${r.fechaStr}</td>
-                    <td class="p-2 font-semibold">${r.grupo}</td>
-                    <td class="p-2">${r.jefe}</td>
-                    <td class="p-2">${r.om || r.aviso}</td>
-                    <td class="p-2"><span class="bg-purple-200 text-purple-900 font-bold px-1.5 py-0.5 rounded text-[10px]">${r.sisproing}</span></td>
-                </tr>
-            `).join('') || '<tr><td colspan="5" class="p-3 text-center text-slate-400">Sin registros</td></tr>';
-
-            // Table 3: Re-programados
-            const listReprog = filteredData.filter(r => ['re-programado', 'reprogramado'].includes(r.estado.toLowerCase()));
-            const tbodyReprog = document.getElementById('tableReprogramadosBody');
-            tbodyReprog.innerHTML = listReprog.map(r => `
-                <tr class="hover:bg-indigo-100/50">
-                    <td class="p-2 whitespace-nowrap">${r.fechaStr}</td>
-                    <td class="p-2 font-semibold">${r.grupo}</td>
-                    <td class="p-2">${r.om || r.aviso}</td>
-                    <td class="p-2 text-slate-500 truncate max-w-xs">${r.obs || 'N/A'}</td>
-                </tr>
-            `).join('') || '<tr><td colspan="4" class="p-3 text-center text-slate-400">Sin registros</td></tr>';
-
-            // Table 4: Cancelados
-            const listCancel = filteredData.filter(r => r.esCancelado);
-            const tbodyCanc = document.getElementById('tableCanceladosBody');
-            tbodyCanc.innerHTML = listCancel.map(r => `
-                <tr class="hover:bg-rose-100/50">
-                    <td class="p-2 whitespace-nowrap">${r.fechaStr}</td>
-                    <td class="p-2 font-semibold">${r.grupo}</td>
-                    <td class="p-2">${r.om || r.aviso}</td>
-                    <td class="p-2"><span class="bg-rose-200 text-rose-900 font-bold px-1.5 py-0.5 rounded text-[10px]">${r.sisproing.startsWith('CANCELAR') ? 'Sisproing (' + r.sisproing + ')' : 'Estado (Cancelado)'}</span></td>
-                </tr>
-            `).join('') || '<tr><td colspan="4" class="p-3 text-center text-slate-400">Sin registros</td></tr>';
-        }
-
-        function renderFinalizadasTable() {
-            const listFinalizadas = filteredData.filter(r => ['finalizado', 'ejecutado'].includes(r.estado.toLowerCase()));
-            const tbody = document.getElementById('tableFinalizadasBody');
-            tbody.innerHTML = listFinalizadas.map(r => `
-                <tr class="hover:bg-slate-50">
-                    <td class="p-2.5 font-semibold text-slate-600">${r.mes}</td>
-                    <td class="p-2.5 whitespace-nowrap">${r.fechaStr}</td>
-                    <td class="p-2.5 font-bold text-amber-600">${r.grupo}</td>
-                    <td class="p-2.5">${r.jefe}</td>
-                    <td class="p-2.5 font-mono">${r.om}</td>
-                    <td class="p-2.5 font-mono">${r.aviso}</td>
-                    <td class="p-2.5">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.sisproing.toUpperCase() === 'DILIGENCIADA' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-                            ${r.sisproing}
-                        </span>
-                    </td>
-                    <td class="p-2.5 text-slate-500">${r.obs || '-'}</td>
-                </tr>
-            `).join('') || '<tr><td colspan="8" class="p-4 text-center text-slate-400">No hay actividades finalizadas con los filtros aplicados.</td></tr>';
-        }
-
-        function renderFinesSemanaTable() {
-            const listFds = filteredData.filter(r => r.esFinDeSemana);
-            const tbody = document.getElementById('tableFinesSemanaBody');
-            tbody.innerHTML = listFds.map(r => `
-                <tr class="hover:bg-slate-50">
-                    <td class="p-2.5 font-semibold text-indigo-700 whitespace-nowrap">${r.fechaStr}</td>
-                    <td class="p-2.5">${r.mes}</td>
-                    <td class="p-2.5 font-bold">${r.grupo}</td>
-                    <td class="p-2.5">${r.jefe}</td>
-                    <td class="p-2.5">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.estado.toLowerCase() === 'no labora' ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-900'}">
-                            ${r.estado}
-                        </span>
-                    </td>
-                    <td class="p-2.5">${r.sisproing}</td>
-                    <td class="p-2.5 font-mono">${r.om || r.aviso}</td>
-                </tr>
-            `).join('') || '<tr><td colspan="7" class="p-4 text-center text-slate-400">No hay datos de fines de semana con los filtros aplicados.</td></tr>';
-        }
-
-        function renderFullTable() {
-            const tbody = document.getElementById('tableFullDataBody');
-            tbody.innerHTML = filteredData.map(r => `
-                <tr class="hover:bg-slate-50">
-                    <td class="p-2">${r.mes}</td>
-                    <td class="p-2 whitespace-nowrap">${r.fechaStr}</td>
-                    <td class="p-2 font-semibold">${r.grupo}</td>
-                    <td class="p-2">${r.jefe}</td>
-                    <td class="p-2 font-mono">${r.om}</td>
-                    <td class="p-2 font-mono">${r.aviso}</td>
-                    <td class="p-2 font-medium">${r.estado}</td>
-                    <td class="p-2">${r.sisproing}</td>
-                    <td class="p-2 text-slate-500">${r.obs}</td>
-                </tr>
-            `).join('') || '<tr><td colspan="9" class="p-4 text-center text-slate-400">Sin registros para mostrar.</td></tr>';
-        }
-
-        function renderCharts() {
-            // Chart 1: Mes vs Estado
-            const ctx1 = document.getElementById('chartMesEstado').getContext('2d');
-            const mesesList = [...new Set(filteredData.map(r => r.mes))];
-            
-            const countFinalizados = mesesList.map(m => filteredData.filter(r => r.mes === m && ['finalizado','ejecutado'].includes(r.estado.toLowerCase())).length);
-            const countEjecucion = mesesList.map(m => filteredData.filter(r => r.mes === m && r.estado.toLowerCase() === 'en ejecución').length);
-            const countOtros = mesesList.map(m => filteredData.filter(r => r.mes === m && !['finalizado','ejecutado','en ejecución'].includes(r.estado.toLowerCase())).length);
-
-            if (chart1Instance) chart1Instance.destroy();
-            chart1Instance = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: mesesList,
-                    datasets: [
-                        { label: 'Finalizado', data: countFinalizados, backgroundColor: '#10b981' },
-                        { label: 'En Ejecución', data: countEjecucion, backgroundColor: '#f59e0b' },
-                        { label: 'Otros / Pendientes', data: countOtros, backgroundColor: '#64748b' }
-                    ]
+    with col_a1:
+        st.markdown('<div class="alert-header alert-warning">🟡 1. Actividades EN EJECUCIÓN (Con antigüedad al día de hoy)</div>', unsafe_allow_html=True)
+        df_ejec = df_base[df_base['Estado'].str.lower() == 'en ejecución'].copy()
+        if not df_ejec.empty:
+            cols_ej = ['FECHA_STR', 'DIAS_EN_EJECUCION', 'GRUPO', 'JEFE DE CUADRILLA', 'OM', 'AVISO (VP)', 'DILIGENCIADA EN SISPROING']
+            st.dataframe(
+                df_ejec[cols_ej].sort_values(by='DIAS_EN_EJECUCION', ascending=False),
+                column_config={
+                    "FECHA_STR": "Fecha Prog.",
+                    "DIAS_EN_EJECUCION": st.column_config.NumberColumn("Días Activos", format="%d días"),
+                    "GRUPO": "Cuadrilla",
+                    "JEFE DE CUADRILLA": "Jefe Cuadrilla",
+                    "DILIGENCIADA EN SISPROING": "Sisproing"
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom' } }
-                }
-            });
+                use_container_width=True,
+                height=260,
+                hide_index=True
+            )
+        else:
+            st.info("No hay actividades registradas actualmente en estado 'En Ejecución'.")
 
-            // Chart 2: Sisproing Pie
-            const ctx2 = document.getElementById('chartSisproing').getContext('2d');
-            const sisTypes = [...new Set(filteredData.map(r => r.sisproing))];
-            const sisCounts = sisTypes.map(s => filteredData.filter(r => r.sisproing === s).length);
-
-            if (chart2Instance) chart2Instance.destroy();
-            chart2Instance = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: sisTypes,
-                    datasets: [{
-                        data: sisCounts,
-                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b']
-                    }]
+    with col_a2:
+        st.markdown('<div class="alert-header alert-purple">💜 2. Actividades FINALIZADAS pero SIN DILIGENCIAR en Sisproing</div>', unsafe_allow_html=True)
+        df_fsd = df_base[
+            df_base['Estado'].str.lower().isin(['finalizado', 'ejecutado']) & 
+            (df_base['DILIGENCIADA EN SISPROING'].str.upper() != 'DILIGENCIADA') &
+            (~df_base['ES_CANCELADO'])
+        ].copy()
+        
+        if not df_fsd.empty:
+            cols_fsd = ['FECHA_STR', 'GRUPO', 'JEFE DE CUADRILLA', 'OM', 'AVISO (VP)', 'DILIGENCIADA EN SISPROING', 'OBSERVACIONES']
+            st.dataframe(
+                df_fsd[cols_fsd],
+                column_config={
+                    "FECHA_STR": "Fecha",
+                    "GRUPO": "Cuadrilla",
+                    "DILIGENCIADA EN SISPROING": "Estado Sisproing"
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom' } }
-                }
-            });
-        }
+                use_container_width=True,
+                height=260,
+                hide_index=True
+            )
+        else:
+            st.success("¡Excelente! Todas las actividades finalizadas están debidamente diligenciadas en Sisproing.")
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`tab-${tabName}`).classList.add('active');
+    st.divider()
 
-            ['auditoria', 'finalizadas', 'finesSemana', 'graficos', 'tabla'].forEach(t => {
-                document.getElementById(`content-${t}`).classList.add('hidden');
-            });
-            document.getElementById(`content-${tabName}`).classList.remove('hidden');
-        }
+    col_a3, col_a4 = st.columns(2)
 
-        function exportTableToCSV(tableId, filename) {
-            const table = document.getElementById(tableId);
-            let csv = [];
-            for (let i = 0; i < table.rows.length; i++) {
-                let row = [], cols = table.rows[i].querySelectorAll("td, th");
-                for (let j = 0; j < cols.length; j++) 
-                    row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
-                csv.push(row.join(","));
-            }
-            const csvFile = new Blob([csv.join("\n")], { type: "text/csv;charset=utf-8;" });
-            const downloadLink = document.createElement("a");
-            downloadLink.download = filename;
-            downloadLink.href = window.URL.createObjectURL(csvFile);
-            downloadLink.style.display = "none";
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-        }
-    </script>
-</body>
-</html>
+    with col_a3:
+        st.markdown('<div class="alert-header alert-info">🔵 3. Actividades Re-Programadas</div>', unsafe_allow_html=True)
+        df_rep = df_base[df_base['Estado'].str.lower().isin(['re-programado', 'reprogramado'])].copy()
+        if not df_rep.empty:
+            cols_rep = ['FECHA_STR', 'GRUPO', 'JEFE DE CUADRILLA', 'OM', 'AVISO (VP)', 'OBSERVACIONES']
+            st.dataframe(
+                df_rep[cols_rep],
+                column_config={"FECHA_STR": "Fecha", "GRUPO": "Cuadrilla"},
+                use_container_width=True,
+                height=240,
+                hide_index=True
+            )
+        else:
+            st.info("No hay actividades reprogramadas en la selección actual.")
+
+    with col_a4:
+        st.markdown('<div class="alert-header alert-danger">🔴 4. Actividades Canceladas (Unificado Sisproing y Estado)</div>', unsafe_allow_html=True)
+        df_canc = df_base[df_base['ES_CANCELADO']].copy()
+        if not df_canc.empty:
+            cols_canc = ['FECHA_STR', 'GRUPO', 'JEFE DE CUADRILLA', 'OM', 'AVISO (VP)', 'Estado', 'DILIGENCIADA EN SISPROING']
+            st.dataframe(
+                df_canc[cols_canc],
+                column_config={"FECHA_STR": "Fecha", "DILIGENCIADA EN SISPROING": "Sisproing"},
+                use_container_width=True,
+                height=240,
+                hide_index=True
+            )
+        else:
+            st.info("No hay actividades canceladas en el filtro aplicado.")
+
+
+# ---------------------------------------------------------
+# PESTAÑA 2: ACTIVIDADES FINALIZADAS
+# ---------------------------------------------------------
+with t_fin:
+    st.markdown("### ✅ Registro Completo de Actividades Finalizadas / Ejecutadas")
+    st.caption("Monitoreo de cierre formal de órdenes de trabajo y conciliación en Sisproing.")
+
+    df_finalizadas_full = df_base[
+        df_base['Estado'].str.lower().isin(['finalizado', 'ejecutado']) & 
+        (~df_base['ES_CANCELADO'])
+    ].copy()
+
+    col_f1, col_f2 = st.columns([3, 1])
+    with col_f1:
+        st.markdown(f"**Total Ejecutadas en Filtro:** `{len(df_finalizadas_full):,}` órdenes de trabajo")
+    with col_f2:
+        if not df_finalizadas_full.empty:
+            csv_fin = df_finalizadas_full.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Exportar Finalizadas a CSV", data=csv_fin, file_name="actividades_finalizadas.csv", mime="text/csv")
+
+    if not df_finalizadas_full.empty:
+        cols_show_fin = ['MES', 'FECHA_STR', 'GRUPO', 'JEFE DE CUADRILLA', 'OM', 'AVISO (VP)', 'DILIGENCIADA EN SISPROING', 'OBSERVACIONES']
+        st.dataframe(
+            df_finalizadas_full[cols_show_fin],
+            column_config={
+                "MES": "Mes",
+                "FECHA_STR": "Fecha Ejecución",
+                "GRUPO": "Cuadrilla",
+                "JEFE DE CUADRILLA": "Jefe de Cuadrilla",
+                "DILIGENCIADA EN SISPROING": "Estado Sisproing"
+            },
+            use_container_width=True,
+            height=450,
+            hide_index=True
+        )
+    else:
+        st.warning("No se encontraron actividades finalizadas con los criterios seleccionados.")
+
+
+# ---------------------------------------------------------
+# PESTAÑA 3: CONTROL DE FINES DE SEMANA (SÁB / DOM)
+# ---------------------------------------------------------
+with t_fds:
+    st.markdown("### 📅 Matriz Operativa de Fines de Semana")
+    st.caption("Verificación de la regla de negocio: **Cobertura continua alternada de cuadrillas LINV los Sábados y Domingos**.")
+
+    df_fds = df_base[df_base['ES_FIN_SEMANA']].copy()
+
+    if not df_fds.empty:
+        df_fds['DÍA_SEMANA'] = df_fds['FECHA_DT'].dt.strftime('%A')
+        # Traducción de días
+        dias_es = {'Saturday': 'Sábado', 'Sunday': 'Domingo'}
+        df_fds['DÍA_SEMANA'] = df_fds['DÍA_SEMANA'].map(dias_es).fillna(df_fds['DÍA_SEMANA'])
+
+        cols_fds = ['FECHA_STR', 'DÍA_SEMANA', 'MES', 'GRUPO', 'JEFE DE CUADRILLA', 'Estado', 'DILIGENCIADA EN SISPROING', 'OM', 'AVISO (VP)']
+        
+        st.dataframe(
+            df_fds[cols_fds].sort_values(by='FECHA_STR', ascending=False),
+            column_config={
+                "FECHA_STR": "Fecha",
+                "DÍA_SEMANA": "Día",
+                "GRUPO": "Cuadrilla",
+                "Estado": "Estado Operativo"
+            },
+            use_container_width=True,
+            height=450,
+            hide_index=True
+        )
+    else:
+        st.info("No existen registros programados para fines de semana en la selección actual.")
+
+
+# ---------------------------------------------------------
+# PESTAÑA 4: ANÁLISIS ESTADÍSTICO Y GRÁFICOS
+# ---------------------------------------------------------
+with t_charts:
+    st.markdown("### 📊 Indicadores Gráficos de Gestión")
+
+    g1, g2 = st.columns(2)
+
+    with g1:
+        st.subheader("Estado de Actividades por Mes")
+        df_g_mes = df_base.groupby(['MES', 'Estado']).size().reset_index(name='Cantidad')
+        fig_mes = px.bar(
+            df_g_mes, x='MES', y='Cantidad', color='Estado',
+            barmode='stack', text='Cantidad',
+            color_discrete_sequence=px.colors.qualitative.Bold
+        )
+        fig_mes.update_layout(xaxis_title="", yaxis_title="N° de Actividades", legend_title="Estado")
+        st.plotly_chart(fig_mes, use_container_width=True)
+
+    with g2:
+        st.subheader("Estatus Sisproing por Jefe de Cuadrilla")
+        df_g_jefe = df_base.groupby(['JEFE DE CUADRILLA', 'DILIGENCIADA EN SISPROING']).size().reset_index(name='Cantidad')
+        fig_jefe = px.bar(
+            df_g_jefe, y='JEFE DE CUADRILLA', x='Cantidad', color='DILIGENCIADA EN SISPROING',
+            orientation='h', text='Cantidad',
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        fig_jefe.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_title="Cantidad", yaxis_title="")
+        st.plotly_chart(fig_jefe, use_container_width=True)
+
+
+# ---------------------------------------------------------
+# PESTAÑA 5: BASE DE DATOS COMPLETA
+# ---------------------------------------------------------
+with t_data:
+    st.markdown("### 📋 Registro Detallado y Exportación de Datos")
+
+    cols_all = ['MES', 'FECHA_STR', 'GRUPO', 'JEFE DE CUADRILLA', 'OM', 'AVISO (VP)', 'Estado', 'DILIGENCIADA EN SISPROING', 'OBSERVACIONES']
+    cols_exist_all = [c for c in cols_all if c in df_base.columns]
+
+    st.dataframe(df_base[cols_exist_all], use_container_width=True, height=450, hide_index=True)
+
+    csv_full = df_base[cols_exist_all].to_csv(index=False).encode('utf-8')
+    st.download_button(
+        "📥 Descargar Reporte Filtrado (CSV)",
+        data=csv_full,
+        file_name=f"reporte_operativo_linea_viva_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv"
+    )
+
+# Pie de Página
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 0.8rem;'>Sistema Operativo de Control y Seguimiento — Celsia / Proyectos de Ingeniería S.A.</p>", unsafe_allow_html=True)
